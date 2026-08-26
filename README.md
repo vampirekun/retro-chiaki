@@ -1,4 +1,5 @@
 # Retro Chiaki for KNULLI
+<img width="710" height="567" alt="image" src="https://github.com/user-attachments/assets/d16bc6fa-3fd9-46b2-bbd1-f50b2cbc3eca" />
 
 PlayStation Remote Play for PS4 and PS5 on the Anbernic RG34XX-SP running
 KNULLI.
