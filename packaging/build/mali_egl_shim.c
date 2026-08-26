@@ -63,6 +63,19 @@ static EGLBoolean (*real_eglGetConfigAttrib)(EGLDisplay, EGLConfig,
 static EGLBoolean (*real_eglGetConfigs)(EGLDisplay, EGLConfig *,
         EGLint, EGLint *) = NULL;
 static EGLBoolean (*real_eglBindAPI)(EGLenum) = NULL;
+static EGLContext (*real_eglCreateContext)(EGLDisplay, EGLConfig,
+        EGLContext, const EGLint *) = NULL;
+static EGLBoolean (*real_eglMakeCurrent)(EGLDisplay, EGLSurface,
+        EGLSurface, EGLContext) = NULL;
+static EGLBoolean (*real_eglSwapBuffers)(EGLDisplay, EGLSurface) = NULL;
+static EGLint (*real_eglGetError)(void) = NULL;
+static void (*real_glClearColor)(float, float, float, float) = NULL;
+static void (*real_glClear)(unsigned int) = NULL;
+static void (*real_glColorMask)(unsigned char, unsigned char,
+        unsigned char, unsigned char) = NULL;
+static void (*real_glReadPixels)(int, int, int, int,
+        unsigned int, unsigned int, void *) = NULL;
+static unsigned int (*real_glGetError)(void) = NULL;
 
 /* Resolve all real EGL functions via explicit dlopen of libmali */
 static void resolve_egl(void) {
@@ -75,6 +88,16 @@ static void resolve_egl(void) {
     real_eglChooseConfig        = dlsym(RTLD_NEXT, "eglChooseConfig");
     real_eglGetConfigAttrib     = dlsym(RTLD_NEXT, "eglGetConfigAttrib");
     real_eglGetConfigs          = dlsym(RTLD_NEXT, "eglGetConfigs");
+    real_eglBindAPI             = dlsym(RTLD_NEXT, "eglBindAPI");
+    real_eglCreateContext       = dlsym(RTLD_NEXT, "eglCreateContext");
+    real_eglMakeCurrent         = dlsym(RTLD_NEXT, "eglMakeCurrent");
+    real_eglSwapBuffers         = dlsym(RTLD_NEXT, "eglSwapBuffers");
+    real_eglGetError            = dlsym(RTLD_NEXT, "eglGetError");
+    real_glClearColor           = dlsym(RTLD_NEXT, "glClearColor");
+    real_glClear                = dlsym(RTLD_NEXT, "glClear");
+    real_glColorMask            = dlsym(RTLD_NEXT, "glColorMask");
+    real_glReadPixels           = dlsym(RTLD_NEXT, "glReadPixels");
+    real_glGetError             = dlsym(RTLD_NEXT, "glGetError");
 
     if (!real_eglGetDisplay) {
         /* Fall back: explicitly open libmali */
@@ -98,6 +121,15 @@ static void resolve_egl(void) {
             real_eglGetConfigAttrib     = dlsym(g_libegl, "eglGetConfigAttrib");
             real_eglGetConfigs          = dlsym(g_libegl, "eglGetConfigs");
             real_eglBindAPI             = dlsym(g_libegl, "eglBindAPI");
+            real_eglCreateContext       = dlsym(g_libegl, "eglCreateContext");
+            real_eglMakeCurrent         = dlsym(g_libegl, "eglMakeCurrent");
+            real_eglSwapBuffers         = dlsym(g_libegl, "eglSwapBuffers");
+            real_eglGetError            = dlsym(g_libegl, "eglGetError");
+            real_glClearColor           = dlsym(g_libegl, "glClearColor");
+            real_glClear                = dlsym(g_libegl, "glClear");
+            real_glColorMask            = dlsym(g_libegl, "glColorMask");
+            real_glReadPixels           = dlsym(g_libegl, "glReadPixels");
+            real_glGetError             = dlsym(g_libegl, "glGetError");
         }
     }
 
@@ -105,9 +137,12 @@ static void resolve_egl(void) {
         real_eglBindAPI = dlsym(RTLD_NEXT, "eglBindAPI");
 
     fprintf(stderr, "[mali_egl_shim] EGL resolved: GetDisplay=%p Initialize=%p"
-            " ChooseConfig=%p CreateWindowSurface=%p\n",
+            " ChooseConfig=%p CreateWindowSurface=%p CreateContext=%p"
+            " MakeCurrent=%p SwapBuffers=%p\n",
             (void*)real_eglGetDisplay, (void*)real_eglInitialize,
-            (void*)real_eglChooseConfig, (void*)real_eglCreateWindowSurface);
+            (void*)real_eglChooseConfig, (void*)real_eglCreateWindowSurface,
+            (void*)real_eglCreateContext, (void*)real_eglMakeCurrent,
+            (void*)real_eglSwapBuffers);
 }
 
 static void init_shim(void) __attribute__((constructor));
@@ -180,12 +215,14 @@ EGLBoolean eglInitialize(EGLDisplay dpy, EGLint *major, EGLint *minor) {
 
 /* Force GLES API regardless of what Qt requests */
 EGLBoolean eglBindAPI(EGLenum api) {
+    static unsigned long call_count = 0;
     resolve_egl();
+    call_count++;
     /* Always bind GLES — Mali doesn't support desktop EGL_OPENGL_API */
     if (api == EGL_OPENGL_API) {
         fprintf(stderr, "[mali_egl_shim] eglBindAPI: replacing EGL_OPENGL_API with EGL_OPENGL_ES_API\n");
         api = EGL_OPENGL_ES_API;
-    } else {
+    } else if (call_count <= 3) {
         fprintf(stderr, "[mali_egl_shim] eglBindAPI: api=0x%x\n", api);
     }
     if (!real_eglBindAPI) return EGL_TRUE;  /* assume ES already default */
@@ -297,6 +334,142 @@ EGLSurface eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config,
         fprintf(stderr, "[mali_egl_shim] ERROR: real_eglCreateWindowSurface is NULL!\n");
         return EGL_NO_SURFACE;
     }
-    return real_eglCreateWindowSurface(dpy, config,
+    if (real_eglGetConfigAttrib) {
+        EGLint id = -1, red = -1, green = -1, blue = -1, alpha = -1;
+        real_eglGetConfigAttrib(dpy, config, EGL_CONFIG_ID, &id);
+        real_eglGetConfigAttrib(dpy, config, EGL_RED_SIZE, &red);
+        real_eglGetConfigAttrib(dpy, config, EGL_GREEN_SIZE, &green);
+        real_eglGetConfigAttrib(dpy, config, EGL_BLUE_SIZE, &blue);
+        real_eglGetConfigAttrib(dpy, config, EGL_ALPHA_SIZE, &alpha);
+        fprintf(stderr, "[mali_egl_shim] window config id=%d RGBA=%d%d%d%d\n",
+                id, red, green, blue, alpha);
+    }
+
+    EGLSurface surface = real_eglCreateWindowSurface(dpy, config,
                 (EGLNativeWindowType)&g_mali_window, attrib_list);
+    EGLint error = surface == EGL_NO_SURFACE && real_eglGetError
+            ? real_eglGetError() : EGL_SUCCESS;
+    fprintf(stderr, "[mali_egl_shim] eglCreateWindowSurface -> %p (error=0x%x)\n",
+            surface, error);
+    return surface;
+}
+
+EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config,
+                            EGLContext share_context,
+                            const EGLint *attrib_list)
+{
+    resolve_egl();
+    if (!real_eglCreateContext) {
+        fprintf(stderr, "[mali_egl_shim] ERROR: real_eglCreateContext is NULL!\n");
+        return EGL_NO_CONTEXT;
+    }
+
+    EGLint client_version = 0;
+    if (attrib_list) {
+        for (int i = 0; attrib_list[i] != EGL_NONE; i += 2) {
+            if (attrib_list[i] == EGL_CONTEXT_CLIENT_VERSION)
+                client_version = attrib_list[i + 1];
+        }
+    }
+
+    EGLContext context = real_eglCreateContext(dpy, config, share_context,
+                                                attrib_list);
+    EGLint error = context == EGL_NO_CONTEXT && real_eglGetError
+            ? real_eglGetError() : EGL_SUCCESS;
+    fprintf(stderr, "[mali_egl_shim] eglCreateContext(es=%d share=%p) -> %p"
+            " (error=0x%x)\n", client_version, share_context, context, error);
+    return context;
+}
+
+EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw,
+                          EGLSurface read, EGLContext context)
+{
+    static unsigned long call_count = 0;
+    resolve_egl();
+    if (!real_eglMakeCurrent) {
+        fprintf(stderr, "[mali_egl_shim] ERROR: real_eglMakeCurrent is NULL!\n");
+        return EGL_FALSE;
+    }
+
+    call_count++;
+    EGLBoolean result = real_eglMakeCurrent(dpy, draw, read, context);
+    EGLint error = !result && real_eglGetError ? real_eglGetError() : EGL_SUCCESS;
+    if (call_count <= 6 || !result) {
+        fprintf(stderr, "[mali_egl_shim] eglMakeCurrent[%lu](draw=%p read=%p"
+                " context=%p) -> %d (error=0x%x)\n", call_count, draw, read,
+                context, result, error);
+    }
+    return result;
+}
+
+EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
+{
+    static unsigned long call_count = 0;
+    resolve_egl();
+    if (!real_eglSwapBuffers) {
+        fprintf(stderr, "[mali_egl_shim] ERROR: real_eglSwapBuffers is NULL!\n");
+        return EGL_FALSE;
+    }
+
+    call_count++;
+    if (call_count <= 4 && getenv("MALI_EGL_SHIM_INSPECT_FRAME")
+            && real_glReadPixels) {
+        size_t pixel_count = (size_t)g_mali_window.width * g_mali_window.height;
+        unsigned char *pixels = malloc(pixel_count * 4);
+        if (pixels) {
+            real_glReadPixels(0, 0, g_mali_window.width, g_mali_window.height,
+                              0x1908, 0x1401, pixels); /* GL_RGBA, GL_UNSIGNED_BYTE */
+            unsigned int gl_error = real_glGetError ? real_glGetError() : 0;
+            unsigned int minimum[4] = { 255, 255, 255, 255 };
+            unsigned int maximum[4] = { 0, 0, 0, 0 };
+            unsigned long long sums[4] = { 0, 0, 0, 0 };
+            size_t non_black = 0, alpha_zero = 0, alpha_opaque = 0;
+            for (size_t i = 0; i < pixel_count; i++) {
+                for (int channel = 0; channel < 4; channel++) {
+                    unsigned int value = pixels[i * 4 + channel];
+                    if (value < minimum[channel]) minimum[channel] = value;
+                    if (value > maximum[channel]) maximum[channel] = value;
+                    sums[channel] += value;
+                }
+                if (pixels[i * 4] || pixels[i * 4 + 1] || pixels[i * 4 + 2])
+                    non_black++;
+                if (pixels[i * 4 + 3] == 0) alpha_zero++;
+                if (pixels[i * 4 + 3] == 255) alpha_opaque++;
+            }
+            fprintf(stderr, "[mali_egl_shim] frame[%lu] pixels:"
+                    " R=%u-%u/%llu G=%u-%u/%llu B=%u-%u/%llu A=%u-%u/%llu"
+                    " nonblack=%zu alpha0=%zu alpha255=%zu gl_error=0x%x\n",
+                    call_count,
+                    minimum[0], maximum[0], sums[0],
+                    minimum[1], maximum[1], sums[1],
+                    minimum[2], maximum[2], sums[2],
+                    minimum[3], maximum[3], sums[3],
+                    non_black, alpha_zero, alpha_opaque, gl_error);
+            free(pixels);
+        }
+    }
+
+    if (getenv("MALI_EGL_SHIM_FORCE_OPAQUE") && real_glColorMask
+            && real_glClearColor && real_glClear) {
+        real_glColorMask(0, 0, 0, 1);
+        real_glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        real_glClear(0x00004000); /* GL_COLOR_BUFFER_BIT */
+        real_glColorMask(1, 1, 1, 1);
+        if (call_count == 1)
+            fprintf(stderr, "[mali_egl_shim] forced framebuffer alpha opaque\n");
+    }
+
+    if (getenv("MALI_EGL_SHIM_TEST_CLEAR") && real_glClearColor && real_glClear) {
+        real_glClearColor(1.0f, 0.0f, 1.0f, 1.0f);
+        real_glClear(0x00004000); /* GL_COLOR_BUFFER_BIT */
+        if (call_count == 1)
+            fprintf(stderr, "[mali_egl_shim] injected opaque magenta test frame\n");
+    }
+    EGLBoolean result = real_eglSwapBuffers(dpy, surface);
+    EGLint error = !result && real_eglGetError ? real_eglGetError() : EGL_SUCCESS;
+    if (call_count <= 6 || call_count % 120 == 0 || !result) {
+        fprintf(stderr, "[mali_egl_shim] eglSwapBuffers[%lu](surface=%p) -> %d"
+                " (error=0x%x)\n", call_count, surface, result, error);
+    }
+    return result;
 }

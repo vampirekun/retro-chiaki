@@ -1,58 +1,146 @@
-# Installation and setup
+# KNULLI installation and setup
+
+## Requirements
+
+- Anbernic RG34XX-SP running KNULLI.
+- PortMaster installed and working.
+- A PS4 or PS5 with Remote Play enabled.
+- The handheld and console reachable over the same network for initial setup.
+
+The verified firmware is KNULLI Scarab dated 2026-05-11. This package is not a
+drop-in replacement for the muOS release.
 
 ## Install the release
 
-Download `retro-chiaki-v0.3.2-portmaster-muos-h700.zip` and extract it to the root of the SD card that contains the `ROMS` and `ports` directories. Do not extract it inside `ROMS`, `ROMS/Ports` or `ports`; the archive already contains the complete directory layout.
+Download `retro-chiaki-v0.3.2-knulli1-portmaster-knulli-h700.zip` from
+[Releases](https://github.com/vampirekun/retro-chiaki/releases) and extract it
+to the root of KNULLI's userdata partition. The archive already contains the
+complete `roms/ports` layout, so do not extract it inside `roms` or
+`roms/ports`.
 
-After extraction, verify these relative paths on that card:
+Verify these relative paths:
 
 ```text
-ROMS/Ports/Chiaki.sh
-ports/chiaki/chiaki
-ports/chiaki/chiaki-cli
-ports/chiaki/chiaki.gptk
-ports/chiaki/libs/
-ports/chiaki/xkb/
+roms/ports/Chiaki.sh
+roms/ports/chiaki/chiaki
+roms/ports/chiaki/chiaki-cli
+roms/ports/chiaki/chiaki.gptk
+roms/ports/chiaki/libs/
+roms/ports/chiaki/xkb/
 ```
 
-For a standard single-card setup this is normally `/mnt/mmc`; if your ROM storage is on SD2, extract the archive to the root of that card instead. Keep `Chiaki.sh`, `chiaki`, and `chiaki-cli` executable. PortMaster must already be installed because the launcher uses its controller helper and device integration.
+Safely eject the card, boot KNULLI, refresh the game list if necessary, and
+launch **Ports > Chiaki**.
+
+## Upgrade an existing test build
+
+Extract the new archive over the existing port. Chiaki stores registration and
+preferences under:
+
+```text
+/userdata/system/.local/share/Chiaki/
+```
+
+The release archive does not replace that directory. If an early test build
+left files ending in `.ubuntu-disabled`, they are inert and may remain in the
+port's `libs` directory.
 
 ## Register a PS4 or PS5
 
 1. Connect the handheld and console to the same network.
-2. Start Retro Chiaki and add the console manually if discovery does not find it.
-3. Enter your Base64 PSN Account ID using the on-screen keyboard.
-4. On PS5 open **Settings → System → Remote Play → Link Device**. On PS4 open **Settings → Remote Play Connection Settings → Add Device**.
+2. Start Chiaki and add the console manually if discovery does not find it.
+3. Enter the Base64 PSN Account ID with the on-screen keyboard.
+4. On PS5, open **Settings > System > Remote Play > Link Device**. On PS4,
+   open **Settings > Remote Play Connection Settings > Add Device**.
 5. Enter the displayed PIN and complete registration.
 
-The upstream helper [`scripts/psn-account-id.py`](../scripts/psn-account-id.py) can obtain an Account ID through PlayStation OAuth. Never publish your registration data or Chiaki configuration file.
+The upstream helper [`scripts/psn-account-id.py`](../scripts/psn-account-id.py)
+can obtain an Account ID through PlayStation OAuth. Never publish registration
+data or the Chiaki configuration file.
 
-## Display mode
+## Controls
 
-Recommended H700 stream settings are **540p**, **30 FPS**, and **H.264**. In **Settings → Stream Settings → Display Mode**, choose:
+During a stream, the physical labels map to PlayStation as follows:
 
-- **Original** for correct 16:9 proportions with letterboxing on the 3:2 display.
-- **Stretch to Screen** to use the complete detected panel.
+```text
+B = Cross        A = Circle
+Y = Square       X = Triangle
+Select = Share   Start = Options
+M = PS Home      M+Start = Exit
+```
 
-## Other devices and resolutions
+L1/R1, L2/R2, L3/R3, and the D-pad map directly. Before streaming, B confirms,
+A goes back, and the left stick controls the pointer.
 
-This package is designed for compatible Allwinner H700 handhelds and detects 720×480 or 640×480 framebuffer geometry at runtime. It has currently been tested only on the Anbernic RG34XXSP (720×480) with muOS 2601 Jacaranda. Other H700 models may use different controller, audio, GPU or firmware integration and should be treated as unverified until reported by users.
+## Stream settings
 
-## Planned Applications package
+Start with **540p**, **30 FPS**, and **H.264**. Use **Original** for correct
+16:9 proportions or **Stretch to Screen** to fill the 720x480 display.
 
-A separate native muOS Applications package is planned, but is not distributed with v0.3.2. For this release, start Retro Chiaki from **Ports → Chiaki**. Do not expect a `MUOS/application/Retro Chiaki` directory in the v0.3.2 archive.
+## KNULLI runtime dependencies
 
-## PortMaster and system dependencies
+The package includes its Qt, FFmpeg, XKB, and Mali EGL requirements. It uses
+KNULLI's own SDL and ALSA libraries instead of the Ubuntu copies from the base
+PortMaster archive. This is required for:
 
-You do not need to install a PortMaster runtime such as `mono`, `love` or `weston`. Retro Chiaki ships its own Qt 5 libraries, Qt EGLFS and image plugins, XKB data and Mali EGL shim inside `ports/chiaki/`.
+- RG34XX-SP raw button identifiers;
+- PipeWire ALSA plugins installed by KNULLI;
+- `/var/run/pipewire-0` and `/var/run/pulse/native` audio sockets.
 
-The tested muOS firmware provides SDL2, FFmpeg, OpenSSL, Opus, evdev/udev and the audio stack. PortMaster itself provides `gptokeyb`, controller discovery and the usual exit-hotkey lifecycle used by the launcher. Therefore removing PortMaster currently prevents Retro Chiaki from launching even though Qt itself is bundled with the package.
+Do not copy `libSDL2-2.0.so.0` or `libasound.so.2` from a desktop Linux build
+into `roms/ports/chiaki/libs`.
 
 ## Troubleshooting
 
-- Restart Chiaki completely after replacing a release binary.
-- Verify Wi-Fi and Remote Play are enabled on the console.
-- **`Unknown ctrl error`:** if the log shows `InvalidSessionId`, `Ctrl did not receive session id`, or a Takion handshake timeout after a successful login, the console's Remote Play session may be temporarily busy or stuck. Wait and retry, close other Remote Play clients, then fully restart the PS4/PS5 if necessary. Do not immediately reinstall Chiaki or register the console again.
-- If video works but audio does not, verify muOS PipeWire/WirePlumber are running and the internal speaker sink is selected.
-- Session logs are normally under `/root/.local/share/Chiaki/Chiaki/log/`.
-- Remove account IDs, IPs, registration keys and other private data before attaching logs to an issue.
+### Video does not start
+
+Check `/userdata/roms/ports/chiaki/log.txt`. A working launch reports the
+720x480 framebuffer, successful EGL initialization, and OpenGL ES.
+
+### Controls are shifted
+
+Confirm the log reports `Anbernic RG34XX-SP Controller` and the mapping begins
+with `a:b4,b:b3,x:b5,y:b6`. Also confirm no active bundled SDL exists in the
+port's `libs` directory.
+
+### Video works but audio is silent
+
+The session log should report:
+
+```text
+SDL stream audio opened with 2 channels @ 48000 Hz
+```
+
+If it reports an ALSA or PipeWire error, verify KNULLI has a selected audio
+sink and that the launcher reports `PipeWire runtime=/var/run`. Confirm no
+active bundled `libasound.so.2` exists in the port.
+
+### Remote Play session fails after login
+
+`InvalidSessionId`, `Unknown ctrl error`, or a Takion timeout can mean another
+Remote Play session is active or the console session is stuck. Close other
+clients, wait briefly, and fully restart the console before re-registering it.
+
+## Logs and privacy
+
+```text
+/userdata/roms/ports/chiaki/log.txt
+/userdata/roms/ports/chiaki/input.log
+/userdata/roms/ports/chiaki/temperature.log
+/userdata/system/.local/share/Chiaki/Chiaki/log/
+```
+
+Remove IP addresses, Account IDs, registration keys, and other private data
+before posting logs.
+
+## Uninstall
+
+Remove only:
+
+```text
+/userdata/roms/ports/Chiaki.sh
+/userdata/roms/ports/chiaki/
+```
+
+Removing `/userdata/system/.local/share/Chiaki/` also deletes registrations and
+preferences, so keep it when reinstalling or upgrading.

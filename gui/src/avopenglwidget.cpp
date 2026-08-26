@@ -112,8 +112,17 @@ QSurfaceFormat AVOpenGLWidget::CreateSurfaceFormat()
 	QSurfaceFormat format;
 	format.setDepthBufferSize(0);
 	format.setStencilBufferSize(0);
-	format.setVersion(3, 2);
-	format.setProfile(QSurfaceFormat::CoreProfile);
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_GLES") != 0)
+	{
+		format.setRenderableType(QSurfaceFormat::OpenGLES);
+		format.setVersion(3, 0);
+		format.setProfile(QSurfaceFormat::NoProfile);
+	}
+	else
+	{
+		format.setVersion(3, 2);
+		format.setProfile(QSurfaceFormat::CoreProfile);
+	}
 #ifdef DEBUG_OPENGL
 	format.setOption(QSurfaceFormat::DebugContext, true);
 #endif

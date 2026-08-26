@@ -1,0 +1,29 @@
+up = up
+down = down
+left = left
+right = right
+
+# Physical B confirms, physical A goes back. The launcher maps the printed
+# Nintendo-style face layout to SDL's positional A/B/X/Y names.
+a = mouse_left
+b = escape
+x = tab
+y = return
+
+start = return
+back = tab
+guide = ""
+
+left_analog_up = mouse_movement_up
+left_analog_down = mouse_movement_down
+left_analog_left = mouse_movement_left
+left_analog_right = mouse_movement_right
+
+deadzone_mode = axial
+deadzone = 1000
+deadzone_scale = 7
+deadzone_delay = 16
+
+mouse_scale = 4096
+mouse_delay = 16
+mouse_slow_scale = 30

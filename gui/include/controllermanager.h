@@ -75,6 +75,8 @@ class Controller : public QObject
 		void UpdateState(SDL_Event event);
 		bool HandleButtonEvent(SDL_ControllerButtonEvent event);
 		bool HandleAxisEvent(SDL_ControllerAxisEvent event);
+		void PollRG34XXSP();
+		void ReloadButtonMapping();
 		// Applies a button_mapping target (a ChiakiControllerButton bit, or
 		// one of the ANALOG_BUTTON_L2/R2 constants) to `state`, whether it
 		// came from a real button event or a trigger-as-digital-button axis.
@@ -94,6 +96,7 @@ class Controller : public QObject
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 		QMap<QPair<Sint64, Sint64>, uint8_t> touch_ids;
 		SDL_GameController *controller;
+		QSet<int> pressed_buttons;
 		// source (SDL_GameControllerButton, or Settings::kTriggerLeftSource/
 		// kTriggerRightSource for the two physical triggers) -> chiaki_button
 		// (ChiakiControllerButton or ChiakiControllerAnalogButton), loaded once

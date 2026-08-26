@@ -9,6 +9,8 @@
 #include <QByteArray>
 #include <QTimer>
 
+#include <cstdio>
+
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 #include <SDL.h>
 #endif
@@ -126,16 +128,28 @@ void ControllerManager::UpdateAvailableControllers()
 {
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 	QSet<SDL_JoystickID> current_controllers;
+	const bool log_input = qEnvironmentVariableIntValue("RETRO_CHIAKI_LOG_INPUT") != 0;
+	if(log_input)
+		fprintf(stderr, "[chiaki-input] SDL joysticks=%d\n", SDL_NumJoysticks());
 	for(int i=0; i<SDL_NumJoysticks(); i++)
 	{
-		if(!SDL_IsGameController(i))
+		const bool is_game_controller = SDL_IsGameController(i) == SDL_TRUE;
+		SDL_JoystickGUID guid = SDL_JoystickGetDeviceGUID(i);
+		char guid_str[33] = {};
+		SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
+		if(log_input)
+		{
+			char *mapping = is_game_controller ? SDL_GameControllerMappingForDeviceIndex(i) : nullptr;
+			fprintf(stderr, "[chiaki-input] device=%d name=\"%s\" guid=%s gamecontroller=%d mapping=%s\n",
+				i, SDL_JoystickNameForIndex(i) ? SDL_JoystickNameForIndex(i) : "<unknown>",
+				guid_str, is_game_controller ? 1 : 0, mapping ? mapping : "<none>");
+			SDL_free(mapping);
+		}
+
+		if(!is_game_controller)
 			continue;
 
 		// We'll try to identify pads with Motion Control
-		SDL_JoystickGUID guid = SDL_JoystickGetGUID(SDL_JoystickOpen(i));
-		char guid_str[256];
-		SDL_JoystickGetGUIDString(guid, guid_str, sizeof(guid_str));
-
 		if(chiaki_motion_controller_guids.contains(guid_str))
 		{
 			SDL_Joystick *joy = SDL_JoystickOpen(i);
@@ -165,12 +179,16 @@ void ControllerManager::HandleEvents()
 	SDL_Event event;
 	while(SDL_PollEvent(&event))
 	{
-		switch(event.type)
+			switch(event.type)
 		{
 			case SDL_JOYDEVICEADDED:
 			case SDL_JOYDEVICEREMOVED:
 				UpdateAvailableControllers();
 				break;
+			case SDL_JOYBUTTONUP:
+			case SDL_JOYBUTTONDOWN:
+			case SDL_JOYHATMOTION:
+			case SDL_JOYAXISMOTION:
 			case SDL_CONTROLLERBUTTONUP:
 			case SDL_CONTROLLERBUTTONDOWN:
 			case SDL_CONTROLLERAXISMOTION:
@@ -183,6 +201,13 @@ void ControllerManager::HandleEvents()
 				ControllerEvent(event);
 				break;
 		}
+	}
+
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_RG34XXSP") != 0)
+	{
+		SDL_JoystickUpdate();
+		for(auto controller : open_controllers)
+			controller->PollRG34XXSP();
 	}
 #endif
 }
@@ -199,6 +224,16 @@ void ControllerManager::ControllerEvent(SDL_Event event)
 			break;
 		case SDL_CONTROLLERAXISMOTION:
 			device_id = event.caxis.which;
+			break;
+		case SDL_JOYBUTTONDOWN:
+		case SDL_JOYBUTTONUP:
+			device_id = event.jbutton.which;
+			break;
+		case SDL_JOYHATMOTION:
+			device_id = event.jhat.which;
+			break;
+		case SDL_JOYAXISMOTION:
+			device_id = event.jaxis.which;
 			break;
 #if SDL_VERSION_ATLEAST(2, 0, 14)
 		case SDL_CONTROLLERSENSORUPDATE:
@@ -257,6 +292,12 @@ Controller::Controller(int device_id, ControllerManager *manager)
 		if(SDL_JoystickGetDeviceInstanceID(i) == device_id)
 		{
 			controller = SDL_GameControllerOpen(i);
+			if(controller && qEnvironmentVariableIntValue("RETRO_CHIAKI_LOG_INPUT") != 0)
+			{
+				char *mapping = SDL_GameControllerMapping(controller);
+				fprintf(stderr, "[chiaki-input] SDL mapping: %s\n", mapping ? mapping : "<none>");
+				SDL_free(mapping);
+			}
 #if SDL_VERSION_ATLEAST(2, 0, 14)
 			if(SDL_GameControllerHasSensor(controller, SDL_SENSOR_ACCEL))
 				SDL_GameControllerSetSensorEnabled(controller, SDL_SENSOR_ACCEL, SDL_TRUE);
@@ -269,22 +310,9 @@ Controller::Controller(int device_id, ControllerManager *manager)
 		}
 	}
 
+	ReloadButtonMapping();
 	if(manager->GetSettings())
-	{
-		auto chiaki_to_sdl = manager->GetSettings()->GetControllerButtonMapping();
-		for(auto it = chiaki_to_sdl.begin(); it != chiaki_to_sdl.end(); ++it)
-			button_mapping.insert(it.value(), it.key());
-	}
-	else
-	{
-		CHIAKI_LOGW(NULL, "ControllerManager has no Settings -- gamepad buttons will not be mapped. This should have been wired up at startup.");
-	}
-	// Real touchpad hardware click (DualShock4/DualSense) always means PS
-	// Touchpad -- there's nothing else sensible to remap it to, and this
-	// handheld's own pad has no such button, so it's not user-configurable.
-#if SDL_VERSION_ATLEAST(2, 0, 14)
-	button_mapping.insert((int)SDL_CONTROLLER_BUTTON_TOUCHPAD, CHIAKI_CONTROLLER_BUTTON_TOUCHPAD);
-#endif
+		connect(manager->GetSettings(), &Settings::ControllerButtonMappingUpdated, this, &Controller::ReloadButtonMapping);
 #endif
 }
 
@@ -303,8 +331,39 @@ Controller::~Controller()
 }
 
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+void Controller::ReloadButtonMapping()
+{
+	button_mapping.clear();
+	if(manager->GetSettings())
+	{
+		auto chiaki_to_sdl = manager->GetSettings()->GetControllerButtonMapping();
+		for(auto it = chiaki_to_sdl.begin(); it != chiaki_to_sdl.end(); ++it)
+			button_mapping.insert(it.value(), it.key());
+	}
+	else
+	{
+		CHIAKI_LOGW(NULL, "ControllerManager has no Settings -- gamepad buttons will not be mapped. This should have been wired up at startup.");
+	}
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+	button_mapping.insert((int)SDL_CONTROLLER_BUTTON_TOUCHPAD, CHIAKI_CONTROLLER_BUTTON_TOUCHPAD);
+#endif
+
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_LOG_INPUT") != 0)
+	{
+		for(auto it = button_mapping.begin(); it != button_mapping.end(); ++it)
+			fprintf(stderr, "[chiaki-input] source=%d (%s) -> target=%d\n", it.key(),
+				Settings::GetSDLButtonName(it.key()).toLocal8Bit().constData(), it.value());
+	}
+}
+
 void Controller::UpdateState(SDL_Event event)
 {
+	// The RG34XX-SP path is polled in PollRG34XXSP() so it cannot depend on
+	// whether this firmware emits raw joystick events alongside controller
+	// events. Ignore all queued translations for that device.
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_RG34XXSP") != 0)
+		return;
+
 	switch(event.type)
 	{
 		case SDL_CONTROLLERBUTTONDOWN:
@@ -335,6 +394,91 @@ void Controller::UpdateState(SDL_Event event)
 	emit StateChanged();
 }
 
+void Controller::PollRG34XXSP()
+{
+	if(!controller)
+		return;
+	SDL_Joystick *joystick = SDL_GameControllerGetJoystick(controller);
+	if(!joystick || SDL_JoystickGetAttached(joystick) != SDL_TRUE)
+		return;
+
+	ChiakiControllerState next_state;
+	chiaki_controller_state_set_idle(&next_state);
+	uint32_t raw_buttons = 0;
+
+	auto apply_button = [&](int raw_button, int target) {
+		if(SDL_JoystickGetButton(joystick, raw_button) == 0)
+			return;
+		raw_buttons |= (1u << raw_button);
+		if(target == CHIAKI_CONTROLLER_ANALOG_BUTTON_L2)
+			next_state.l2_state = 0xff;
+		else if(target == CHIAKI_CONTROLLER_ANALOG_BUTTON_R2)
+			next_state.r2_state = 0xff;
+		else
+			next_state.buttons |= (ChiakiControllerButton)target;
+	};
+
+	apply_button(3, CHIAKI_CONTROLLER_BUTTON_MOON);        // physical A
+	apply_button(4, CHIAKI_CONTROLLER_BUTTON_CROSS);       // physical B
+	apply_button(5, CHIAKI_CONTROLLER_BUTTON_BOX);         // physical Y
+	apply_button(6, CHIAKI_CONTROLLER_BUTTON_PYRAMID);     // physical X
+	apply_button(7, CHIAKI_CONTROLLER_BUTTON_L1);
+	apply_button(8, CHIAKI_CONTROLLER_BUTTON_R1);
+	apply_button(9, CHIAKI_CONTROLLER_BUTTON_SHARE);       // Select
+	apply_button(10, CHIAKI_CONTROLLER_BUTTON_OPTIONS);    // Start
+	apply_button(11, CHIAKI_CONTROLLER_BUTTON_PS);         // M
+	apply_button(12, CHIAKI_CONTROLLER_BUTTON_L3);
+	apply_button(13, CHIAKI_CONTROLLER_ANALOG_BUTTON_L2);
+	apply_button(14, CHIAKI_CONTROLLER_ANALOG_BUTTON_R2);
+	apply_button(15, CHIAKI_CONTROLLER_BUTTON_R3);
+
+	if(SDL_JoystickNumHats(joystick) > 0)
+	{
+		const Uint8 hat = SDL_JoystickGetHat(joystick, 0);
+		if(hat & SDL_HAT_LEFT)
+			next_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT;
+		if(hat & SDL_HAT_RIGHT)
+			next_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT;
+		if(hat & SDL_HAT_UP)
+			next_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_UP;
+		if(hat & SDL_HAT_DOWN)
+			next_state.buttons |= CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN;
+	}
+
+	if(SDL_JoystickNumAxes(joystick) >= 4)
+	{
+		next_state.left_x = SDL_JoystickGetAxis(joystick, 0);
+		next_state.left_y = SDL_JoystickGetAxis(joystick, 1);
+		next_state.right_x = SDL_JoystickGetAxis(joystick, 2);
+		next_state.right_y = SDL_JoystickGetAxis(joystick, 3);
+	}
+
+	if((raw_buttons & (1u << 11)) && (raw_buttons & (1u << 10)))
+	{
+		QCoreApplication::quit();
+		return;
+	}
+
+	if(chiaki_controller_state_equals(&state, &next_state))
+		return;
+	state = next_state;
+
+	const QByteArray input_log_path = qgetenv("RETRO_CHIAKI_INPUT_LOG");
+	if(!input_log_path.isEmpty())
+	{
+		FILE *input_log = fopen(input_log_path.constData(), "a");
+		if(input_log)
+		{
+			fprintf(input_log, "raw=0x%08x ps=0x%08x l2=%u r2=%u axes=%d,%d,%d,%d\n",
+				raw_buttons, state.buttons, state.l2_state, state.r2_state,
+				state.left_x, state.left_y, state.right_x, state.right_y);
+			fclose(input_log);
+		}
+	}
+
+	emit StateChanged();
+}
+
 inline void Controller::ApplyMappedButton(int chiaki_target, bool pressed)
 {
 	// L2/R2 are analog fields (l2_state/r2_state), not bits in the buttons
@@ -352,6 +496,25 @@ inline void Controller::ApplyMappedButton(int chiaki_target, bool pressed)
 }
 
 inline bool Controller::HandleButtonEvent(SDL_ControllerButtonEvent event) {
+	if(event.type == SDL_CONTROLLERBUTTONDOWN)
+		pressed_buttons.insert((int)event.button);
+	else
+		pressed_buttons.remove((int)event.button);
+
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_LOG_INPUT") != 0)
+		fprintf(stderr, "[chiaki-input] button=%d (%s) %s target=%d\n", event.button,
+			SDL_GameControllerGetStringForButton((SDL_GameControllerButton)event.button),
+			event.type == SDL_CONTROLLERBUTTONDOWN ? "down" : "up",
+			button_mapping.value((int)event.button, 0));
+
+	if(pressed_buttons.contains(SDL_CONTROLLER_BUTTON_GUIDE)
+			&& pressed_buttons.contains(SDL_CONTROLLER_BUTTON_START))
+	{
+		fprintf(stderr, "[chiaki-input] M + Start exit chord\n");
+		QCoreApplication::quit();
+		return false;
+	}
+
 	// Which physical button triggers which PS button (including L2/R2) is
 	// user-configurable via Settings::GetControllerButtonMapping() (Settings >
 	// Controller Button Mapping) -- button_mapping was built from it at
@@ -360,12 +523,6 @@ inline bool Controller::HandleButtonEvent(SDL_ControllerButtonEvent event) {
 		return false;
 	ApplyMappedButton(button_mapping[(int)event.button], event.type == SDL_CONTROLLERBUTTONDOWN);
 
-	// Preserve PortMaster/muOS's standard Select + Start exit hotkey while
-	// gptokeyb is paused during streaming. Select is exposed to PS as Touchpad
-	// on this handheld, so test the translated controller state here.
-	const uint32_t exit_combo = CHIAKI_CONTROLLER_BUTTON_TOUCHPAD | CHIAKI_CONTROLLER_BUTTON_OPTIONS;
-	if((state.buttons & exit_combo) == exit_combo)
-		QCoreApplication::quit();
 	return true;
 }
 

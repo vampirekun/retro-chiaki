@@ -154,6 +154,7 @@ class Settings : public QObject
 	signals:
 		void RegisteredHostsUpdated();
 		void ManualHostsUpdated();
+		void ControllerButtonMappingUpdated();
 };
 
 #endif // CHIAKI_SETTINGS_H

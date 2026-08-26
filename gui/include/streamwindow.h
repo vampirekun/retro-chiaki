@@ -27,12 +27,14 @@ class StreamWindow: public QMainWindow
 		QAction *zoom_action;
 		AVOpenGLWidget *av_widget;
 		bool cursor_override_active;
+		bool input_filter_active;
 
 		void Init();
 		void UpdateVideoTransform();
 		void UpdateTransformModeActions();
 
 	protected:
+		bool eventFilter(QObject *watched, QEvent *event) override;
 		void keyPressEvent(QKeyEvent *event) override;
 		void keyReleaseEvent(QKeyEvent *event) override;
 		void closeEvent(QCloseEvent *event) override;

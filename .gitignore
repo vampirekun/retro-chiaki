@@ -4,6 +4,7 @@
 build
 !/packaging/build
 /dist
+/.builds/
 cmake-build-*
 /build_*
 /build-*

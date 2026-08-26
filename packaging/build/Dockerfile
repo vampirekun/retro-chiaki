@@ -3,7 +3,13 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Enable aarch64 multiarch
-RUN dpkg --add-architecture arm64
+RUN dpkg --add-architecture arm64 \
+    && sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list \
+    && printf '%s\n' \
+        'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse' \
+        'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse' \
+        'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse' \
+        > /etc/apt/sources.list.d/arm64-ports.list
 
 # Update and install cross-compilation tools + Qt5 arm64 + all Chiaki deps
 RUN apt-get update && apt-get install -y \

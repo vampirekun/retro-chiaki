@@ -67,6 +67,8 @@ int real_main(int argc, char *argv[])
 	}
 
 	QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_GLES") != 0)
+		QApplication::setAttribute(Qt::AA_UseOpenGLES);
 	QSurfaceFormat::setDefaultFormat(AVOpenGLWidget::CreateSurfaceFormat());
 
 	QApplication app(argc, argv);

@@ -16,6 +16,46 @@
 #include <QScreen>
 #include <QCursor>
 
+#ifdef Q_OS_UNIX
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
+#include <signal.h>
+#include <unistd.h>
+#endif
+
+#ifdef Q_OS_UNIX
+static void SetGptokeybPaused(bool paused)
+{
+	const int signal_number = paused ? SIGSTOP : SIGCONT;
+	const char *action = paused ? "pause" : "resume";
+	bool pid_ok = false;
+	const qlonglong pid_value = QString::fromLocal8Bit(qgetenv("GPTOKEYB_PID")).toLongLong(&pid_ok);
+
+	if(pid_ok && pid_value > 0)
+	{
+		if(::kill(static_cast<pid_t>(pid_value), signal_number) == 0)
+		{
+			fprintf(stderr, "[chiaki-input] gptokeyb %s: pid=%lld signal=%d ok\n",
+				action, pid_value, signal_number);
+			return;
+		}
+
+		const int error_number = errno;
+		fprintf(stderr, "[chiaki-input] gptokeyb %s: pid=%lld failed: %s\n",
+			action, pid_value, std::strerror(error_number));
+	}
+	else
+	{
+		fprintf(stderr, "[chiaki-input] gptokeyb %s: GPTOKEYB_PID is missing or invalid\n", action);
+	}
+
+	const int exit_code = QProcess::execute("pkill", QStringList()
+		<< (paused ? "-STOP" : "-CONT") << "gptokeyb");
+	fprintf(stderr, "[chiaki-input] gptokeyb %s fallback: pkill exit=%d\n", action, exit_code);
+}
+#endif
+
 StreamWindow::StreamWindow(const StreamSessionConnectInfo &connect_info, QWidget *parent)
 	: QMainWindow(parent),
 	connect_info(connect_info)
@@ -26,6 +66,12 @@ StreamWindow::StreamWindow(const StreamSessionConnectInfo &connect_info, QWidget
 	session = nullptr;
 	av_widget = nullptr;
 	cursor_override_active = false;
+	input_filter_active = false;
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_RG34XXSP") != 0)
+	{
+		qApp->installEventFilter(this);
+		input_filter_active = true;
+	}
 
 	try
 	{
@@ -40,13 +86,35 @@ StreamWindow::StreamWindow(const StreamSessionConnectInfo &connect_info, QWidget
 
 StreamWindow::~StreamWindow()
 {
+	if(input_filter_active)
+		qApp->removeEventFilter(this);
 	// make sure av_widget is always deleted before the session
 	delete av_widget;
 	if(QGuiApplication::platformName() == "eglfs")
 	{
 		if(cursor_override_active)
 			QGuiApplication::restoreOverrideCursor();
-		QProcess::execute("pkill", QStringList() << "-CONT" << "gptokeyb");
+#ifdef Q_OS_UNIX
+		SetGptokeybPaused(false);
+#endif
+	}
+}
+
+bool StreamWindow::eventFilter(QObject *watched, QEvent *event)
+{
+	Q_UNUSED(watched);
+	switch(event->type())
+	{
+		case QEvent::KeyPress:
+		case QEvent::KeyRelease:
+		case QEvent::Shortcut:
+		case QEvent::ShortcutOverride:
+		case QEvent::MouseButtonPress:
+		case QEvent::MouseButtonRelease:
+		case QEvent::MouseButtonDblClick:
+			return true;
+		default:
+			return false;
 	}
 }
 
@@ -57,7 +125,11 @@ void StreamWindow::Init()
 	// streaming. Pause it for the lifetime of the stream window and resume it in
 	// the destructor when returning to the connection UI.
 	if(QGuiApplication::platformName() == "eglfs")
-		QProcess::execute("pkill", QStringList() << "-STOP" << "gptokeyb");
+	{
+#ifdef Q_OS_UNIX
+		SetGptokeybPaused(true);
+#endif
+	}
 
 	session = new StreamSession(connect_info, this);
 
@@ -173,12 +245,22 @@ void StreamWindow::Init()
 
 void StreamWindow::keyPressEvent(QKeyEvent *event)
 {
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_RG34XXSP") != 0)
+	{
+		event->accept();
+		return;
+	}
 	if(session)
 		session->HandleKeyboardEvent(event);
 }
 
 void StreamWindow::keyReleaseEvent(QKeyEvent *event)
 {
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_RG34XXSP") != 0)
+	{
+		event->accept();
+		return;
+	}
 	if(session)
 		session->HandleKeyboardEvent(event);
 }

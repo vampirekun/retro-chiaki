@@ -466,6 +466,18 @@ QString Settings::GetSDLButtonName(int source)
 	// appear in every row's dropdown, so the widest one sets the width of
 	// all of them.
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	if(qEnvironmentVariableIntValue("RETRO_CHIAKI_RG34XXSP") != 0)
+	{
+		switch(source)
+		{
+			case SDL_CONTROLLER_BUTTON_A    : return tr("B");
+			case SDL_CONTROLLER_BUTTON_B    : return tr("A");
+			case SDL_CONTROLLER_BUTTON_X    : return tr("Y");
+			case SDL_CONTROLLER_BUTTON_Y    : return tr("X");
+			case SDL_CONTROLLER_BUTTON_GUIDE: return tr("M");
+			default: break;
+		}
+	}
 	switch(source)
 	{
 		case SDL_CONTROLLER_BUTTON_A            : return tr("A");
@@ -528,6 +540,7 @@ void Settings::SetControllerButtonMapping(int chiaki_button, int source)
 {
 	auto button_name = GetChiakiControllerButtonName(chiaki_button).replace(' ', '_').toLower();
 	settings.setValue("controllerbuttonmap/" + button_name, source);
+	emit ControllerButtonMappingUpdated();
 }
 
 QMap<int, int> Settings::GetControllerButtonMapping()
@@ -557,8 +570,11 @@ QMap<int, int> Settings::GetControllerButtonMapping()
 	result.insert(CHIAKI_CONTROLLER_BUTTON_L3        , SDL_CONTROLLER_BUTTON_LEFTSTICK);
 	result.insert(CHIAKI_CONTROLLER_BUTTON_R3        , SDL_CONTROLLER_BUTTON_RIGHTSTICK);
 	result.insert(CHIAKI_CONTROLLER_BUTTON_OPTIONS   , SDL_CONTROLLER_BUTTON_START);
-	result.insert(CHIAKI_CONTROLLER_BUTTON_TOUCHPAD  , SDL_CONTROLLER_BUTTON_BACK);
+	result.insert(CHIAKI_CONTROLLER_BUTTON_SHARE     , SDL_CONTROLLER_BUTTON_BACK);
 	result.insert(CHIAKI_CONTROLLER_BUTTON_PS        , SDL_CONTROLLER_BUTTON_GUIDE);
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+	result.insert(CHIAKI_CONTROLLER_BUTTON_TOUCHPAD  , SDL_CONTROLLER_BUTTON_TOUCHPAD);
+#endif
 #endif
 
 	// Then fill in from settings

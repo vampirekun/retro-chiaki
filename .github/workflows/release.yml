@@ -1,4 +1,4 @@
-name: Build Release
+name: Build KNULLI Release
 on:
   push:
     tags:
@@ -72,10 +72,37 @@ jobs:
             python3-pip
           pip3 install protobuf grpcio-tools
 
-      - name: Build and package release
+      - name: Build base dependency archive
         run: |
           chmod +x packaging/build/ci-package.sh
           packaging/build/ci-package.sh "${{ inputs.version || github.ref_name }}"
+
+      - name: Convert package for KNULLI
+        run: |
+          chmod +x packaging/knulli/build.sh
+          BASE_ZIP="$(find dist -maxdepth 1 -name '*portmaster-muos-h700.zip' -print -quit)"
+          test -n "$BASE_ZIP"
+          packaging/knulli/build.sh \
+            "$BASE_ZIP" \
+            "${{ inputs.version || github.ref_name }}" \
+            dist
+          rm -f "$BASE_ZIP"
+
+      - name: Verify KNULLI package
+        run: |
+          KNULLI_ZIP="$(find dist -maxdepth 1 -name '*portmaster-knulli-h700.zip' -print -quit)"
+          test -n "$KNULLI_ZIP"
+          unzip -Z1 "$KNULLI_ZIP" > "$RUNNER_TEMP/knulli-package-entries.txt"
+          grep -qx 'roms/ports/Chiaki.sh' "$RUNNER_TEMP/knulli-package-entries.txt"
+          grep -qx 'roms/ports/chiaki/chiaki' "$RUNNER_TEMP/knulli-package-entries.txt"
+          if grep -q 'libSDL2-2.0.so.0' "$RUNNER_TEMP/knulli-package-entries.txt"; then
+            echo 'KNULLI package must not bundle SDL' >&2
+            exit 1
+          fi
+          if grep -q 'libasound.so.2' "$RUNNER_TEMP/knulli-package-entries.txt"; then
+            echo 'KNULLI package must not bundle ALSA' >&2
+            exit 1
+          fi
 
       # The workflow_dispatch case has no tag to attach a release to, so
       # upload the zip as a normal build artifact instead -- otherwise a
@@ -84,7 +111,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: retro-chiaki-${{ inputs.version }}
+          name: retro-chiaki-knulli-${{ inputs.version }}
           path: dist/*.zip
 
       - name: Generate changelog
@@ -105,7 +132,7 @@ jobs:
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v3
         with:
-          name: Retro Chiaki ${{ github.ref_name }}
+          name: Retro Chiaki for KNULLI ${{ github.ref_name }}
           body: ${{ steps.git_cliff.outputs.content }}
           draft: false
           prerelease: false
