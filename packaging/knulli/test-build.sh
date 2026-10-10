@@ -64,4 +64,19 @@ if ! grep -q "required package input is missing" "$WORK_ROOT/missing-input.log";
     exit 1
 fi
 
+UNSAFE_OUTPUT="$WORK_ROOT/unsafe-version-output"
+if "$REPO_ROOT/packaging/knulli/build.sh" "$WORK_ROOT/base.zip" "../escape" "$UNSAFE_OUTPUT" > "$WORK_ROOT/unsafe-version.log" 2>&1; then
+    echo "converter unexpectedly accepted a path-like version" >&2
+    exit 1
+fi
+if ! grep -q "invalid version" "$WORK_ROOT/unsafe-version.log"; then
+    echo "converter rejected an unsafe version for an unexpected reason" >&2
+    cat "$WORK_ROOT/unsafe-version.log" >&2
+    exit 1
+fi
+if [ -e "$UNSAFE_OUTPUT" ]; then
+    echo "converter created the output directory before rejecting the version" >&2
+    exit 1
+fi
+
 echo "KNULLI package converter smoke tests passed"
