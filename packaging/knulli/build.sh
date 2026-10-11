@@ -8,6 +8,10 @@ fi
 
 SOURCE_ZIP="$(realpath "$1")"
 VERSION="$2"
+if [[ ! "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]]; then
+    echo "invalid version: use only letters, numbers, dots, underscores, plus signs, or hyphens" >&2
+    exit 2
+fi
 OUTPUT_DIRECTORY="${3:-dist}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

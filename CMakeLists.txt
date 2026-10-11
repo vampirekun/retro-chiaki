@@ -191,6 +191,10 @@ endif()
 if(CHIAKI_ENABLE_TESTS)
 	enable_testing()
 	add_subdirectory(test)
+	if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+		add_test(NAME knulli_package_smoke
+			COMMAND bash "${CMAKE_SOURCE_DIR}/packaging/knulli/test-build.sh")
+	endif()
 endif()
 
 if(CHIAKI_ENABLE_ANDROID)

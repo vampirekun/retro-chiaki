@@ -11,6 +11,10 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+if ($Version -notmatch '\A[A-Za-z0-9][A-Za-z0-9._+-]*\z') {
+    throw "Invalid version string. Use only letters, numbers, dots, underscores, plus signs, or hyphens."
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $sourcePath = (Resolve-Path $SourceZip).Path
 
