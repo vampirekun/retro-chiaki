@@ -71,5 +71,20 @@ The archive must contain `roms/ports/Chiaki.sh` and
 `roms/ports/chiaki/chiaki`. It must not contain active copies of
 `libSDL2-2.0.so.0` or `libasound.so.2` because KNULLI supplies both.
 
+## Package converter smoke test
+
+On Linux, the native CTest suite also runs `packaging/knulli/test-build.sh`.
+The script creates a temporary fixture archive, exercises the Bash converter,
+checks the output layout and executable bits, verifies that host SDL/ALSA
+libraries are removed, and confirms that missing required inputs fail with a
+useful error. This does not replace the full AArch64 cross-compile or hardware
+testing.
+
+Run it directly with:
+
+```bash
+bash packaging/knulli/test-build.sh
+```
+
 For reproducible releases, record the source commit and ZIP checksum in the
 release notes.
