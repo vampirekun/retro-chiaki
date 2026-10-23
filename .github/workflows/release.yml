@@ -112,7 +112,12 @@ jobs:
             echo "expected exactly one KNULLI package, found ${#packages[@]}" >&2
             exit 1
           fi
-          sha256sum "${packages[0]}" > dist/SHA256SUMS
+          package="${packages[0]#dist/}"
+          (
+            cd dist
+            sha256sum -- "$package" > SHA256SUMS
+            sha256sum --check SHA256SUMS
+          )
           cat dist/SHA256SUMS
 
       # The workflow_dispatch case has no tag to attach a release to, so
