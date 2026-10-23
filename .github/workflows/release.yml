@@ -104,6 +104,17 @@ jobs:
             exit 1
           fi
 
+      - name: Generate SHA-256 checksum manifest
+        run: |
+          shopt -s nullglob
+          packages=(dist/*portmaster-knulli-h700.zip)
+          if [ "${packages[@]}" = "" ] || [ "${#packages[@]}" -ne 1 ]; then
+            echo "expected exactly one KNULLI package, found ${#packages[@]}" >&2
+            exit 1
+          fi
+          sha256sum "${packages[0]}" > dist/SHA256SUMS
+          cat dist/SHA256SUMS
+
       # The workflow_dispatch case has no tag to attach a release to, so
       # upload the zip as a normal build artifact instead -- otherwise a
       # manual test run's output would just be discarded with the runner.
@@ -112,7 +123,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: retro-chiaki-knulli-${{ inputs.version }}
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS
 
       - name: Generate changelog
         id: git_cliff
@@ -133,10 +146,16 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           name: Retro Chiaki for KNULLI ${{ github.ref_name }}
-          body: ${{ steps.git_cliff.outputs.content }}
+          body: |
+            ${{ steps.git_cliff.outputs.content }}
+
+            ---
+            Source commit: `${{ github.sha }}`
+            SHA-256 checksum manifest: see the `SHA256SUMS` release asset.
           draft: false
           prerelease: false
           make_latest: true
           fail_on_unmatched_files: true
           files: |
             dist/*.zip
+            dist/SHA256SUMS
