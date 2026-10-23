@@ -108,7 +108,7 @@ jobs:
         run: |
           shopt -s nullglob
           packages=(dist/*portmaster-knulli-h700.zip)
-          if [ "${packages[@]}" = "" ] || [ "${#packages[@]}" -ne 1 ]; then
+          if [ "${#packages[@]}" -ne 1 ]; then
             echo "expected exactly one KNULLI package, found ${#packages[@]}" >&2
             exit 1
           fi
