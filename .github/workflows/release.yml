@@ -133,6 +133,7 @@ jobs:
             dist/SHA256SUMS
 
       - name: Generate changelog
+        if: github.event_name == 'push'
         id: git_cliff
         uses: orhun/git-cliff-action@v4
         with:
