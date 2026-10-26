@@ -105,20 +105,7 @@ jobs:
           fi
 
       - name: Generate SHA-256 checksum manifest
-        run: |
-          shopt -s nullglob
-          packages=(dist/*portmaster-knulli-h700.zip)
-          if [ "${#packages[@]}" -ne 1 ]; then
-            echo "expected exactly one KNULLI package, found ${#packages[@]}" >&2
-            exit 1
-          fi
-          package="${packages[0]#dist/}"
-          (
-            cd dist
-            sha256sum -- "$package" > SHA256SUMS
-            sha256sum --check SHA256SUMS
-          )
-          cat dist/SHA256SUMS
+        run: bash scripts/write-release-checksum-manifest.sh dist
 
       # The workflow_dispatch case has no tag to attach a release to, so
       # upload the zip as a normal build artifact instead -- otherwise a
