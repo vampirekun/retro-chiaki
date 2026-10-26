@@ -37,3 +37,6 @@ jobs:
 
       - name: Unit tests
         run: ctest --test-dir build --output-on-failure
+
+      - name: Test release checksum manifest guard
+        run: bash scripts/test-release-checksum-manifest.sh
