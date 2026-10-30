@@ -6,6 +6,14 @@ HELPER="$SCRIPT_DIR/write-release-checksum-manifest.sh"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/retro-chiaki-checksum.XXXXXX")"
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
+assert_no_temporary_manifest() {
+    local directory="$1"
+    if find "$directory" -maxdepth 1 -type f -name '.SHA256SUMS.*' -print -quit | grep -q .; then
+        echo "checksum helper left a temporary manifest in $directory" >&2
+        exit 1
+    fi
+}
+
 empty_dir="$TMP_ROOT/empty"
 mkdir -p "$empty_dir"
 printf 'stale checksum\n' > "$empty_dir/SHA256SUMS"
@@ -17,6 +25,7 @@ if [[ -e "$empty_dir/SHA256SUMS" ]]; then
     echo "checksum helper left a stale manifest without a package" >&2
     exit 1
 fi
+assert_no_temporary_manifest "$empty_dir"
 
 multiple_dir="$TMP_ROOT/multiple"
 mkdir -p "$multiple_dir"
@@ -31,6 +40,7 @@ if [[ -e "$multiple_dir/SHA256SUMS" ]]; then
     echo "checksum helper left a stale manifest for an ambiguous package set" >&2
     exit 1
 fi
+assert_no_temporary_manifest "$multiple_dir"
 
 single_dir="$TMP_ROOT/single package with spaces"
 mkdir -p "$single_dir"
@@ -47,6 +57,7 @@ if grep -q 'SHA256SUMS' "$single_dir/SHA256SUMS"; then
     echo "checksum manifest must not include itself" >&2
     exit 1
 fi
+assert_no_temporary_manifest "$single_dir"
 (
     cd "$single_dir"
     sha256sum --check SHA256SUMS >/dev/null
