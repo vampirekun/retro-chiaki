@@ -42,6 +42,34 @@ if [[ -e "$multiple_dir/SHA256SUMS" ]]; then
 fi
 assert_no_temporary_manifest "$multiple_dir"
 
+symlink_dir="$TMP_ROOT/symlink"
+mkdir -p "$symlink_dir"
+printf 'external package\n' > "$TMP_ROOT/external-package.zip"
+ln -s "$TMP_ROOT/external-package.zip" "$symlink_dir/external-portmaster-knulli-h700.zip"
+printf 'stale checksum\n' > "$symlink_dir/SHA256SUMS"
+if bash "$HELPER" "$symlink_dir" >"$TMP_ROOT/symlink.log" 2>&1; then
+    echo "checksum helper accepted a symlinked KNULLI package" >&2
+    exit 1
+fi
+if [[ -e "$symlink_dir/SHA256SUMS" ]]; then
+    echo "checksum helper left a stale manifest for a symlinked package" >&2
+    exit 1
+fi
+assert_no_temporary_manifest "$symlink_dir"
+
+directory_dir="$TMP_ROOT/directory"
+mkdir -p "$directory_dir/fake-portmaster-knulli-h700.zip"
+printf 'stale checksum\n' > "$directory_dir/SHA256SUMS"
+if bash "$HELPER" "$directory_dir" >"$TMP_ROOT/directory.log" 2>&1; then
+    echo "checksum helper accepted a directory named like a KNULLI package" >&2
+    exit 1
+fi
+if [[ -e "$directory_dir/SHA256SUMS" ]]; then
+    echo "checksum helper left a stale manifest for a non-file package candidate" >&2
+    exit 1
+fi
+assert_no_temporary_manifest "$directory_dir"
+
 single_dir="$TMP_ROOT/single package with spaces"
 mkdir -p "$single_dir"
 package="retro-chiaki-v0.3.2-portmaster-knulli-h700.zip"
