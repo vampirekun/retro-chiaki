@@ -15,11 +15,19 @@ permissions:
 jobs:
   build-release:
     runs-on: ubuntu-22.04
+    env:
+      RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Test release version validation
+        run: bash scripts/test-release-version-validation.sh
+
+      - name: Validate requested release version
+        run: bash scripts/validate-release-version.sh "$RELEASE_VERSION"
 
       - name: Test release checksum manifest guard
         run: bash scripts/test-release-checksum-manifest.sh
@@ -78,7 +86,7 @@ jobs:
       - name: Build base dependency archive
         run: |
           chmod +x packaging/build/ci-package.sh
-          packaging/build/ci-package.sh "${{ inputs.version || github.ref_name }}"
+          packaging/build/ci-package.sh "$RELEASE_VERSION"
 
       - name: Convert package for KNULLI
         run: |
@@ -87,7 +95,7 @@ jobs:
           test -n "$BASE_ZIP"
           packaging/knulli/build.sh \
             "$BASE_ZIP" \
-            "${{ inputs.version || github.ref_name }}" \
+            "$RELEASE_VERSION" \
             dist
           rm -f "$BASE_ZIP"
 
@@ -117,7 +125,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: retro-chiaki-knulli-${{ inputs.version }}
+          name: retro-chiaki-knulli-${{ env.RELEASE_VERSION }}
           path: |
             dist/*.zip
             dist/SHA256SUMS
