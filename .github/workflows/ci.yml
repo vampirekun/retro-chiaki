@@ -44,5 +44,8 @@ jobs:
       - name: Test release trigger boundaries
         run: bash scripts/test-release-trigger-boundaries.sh
 
+      - name: Test release trigger boundary regressions
+        run: bash scripts/test-release-trigger-boundaries-regressions.sh
+
       - name: Test release checksum manifest guard
         run: bash scripts/test-release-checksum-manifest.sh
