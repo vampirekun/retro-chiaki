@@ -7,14 +7,21 @@ if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
 fi
 
 SOURCE_ZIP="$(realpath "$1")"
+if [[ ! -f "$SOURCE_ZIP" ]]; then
+    echo "source ZIP is not a regular file: $SOURCE_ZIP" >&2
+    exit 2
+fi
+
 VERSION="$2"
 if [[ ! "$VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]]; then
     echo "invalid version: use only letters, numbers, dots, underscores, plus signs, or hyphens" >&2
     exit 2
 fi
-OUTPUT_DIRECTORY="${3:-dist}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+python3 "$REPO_ROOT/scripts/validate-source-package-zip.py" "$SOURCE_ZIP"
+
+OUTPUT_DIRECTORY="${3:-dist}"
 OUTPUT_ROOT="$(mkdir -p "$OUTPUT_DIRECTORY" && cd "$OUTPUT_DIRECTORY" && pwd)"
 WORK_ROOT="$(mktemp -d)"
 trap 'rm -rf "$WORK_ROOT"' EXIT
