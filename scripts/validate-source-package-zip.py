@@ -27,6 +27,7 @@ def main() -> int:
                 return reject("archive is empty")
 
             seen_paths: set[str] = set()
+            seen_files: set[str] = set()
             for entry in entries:
                 name = entry.filename
                 if not name or "\x00" in name:
@@ -43,7 +44,16 @@ def main() -> int:
                 normalized_path = "/".join(parts).casefold()
                 if normalized_path in seen_paths:
                     return reject(f"duplicate or case-colliding entry: {name!r}")
+
+                parent_paths = ["/".join(parts[:index]).casefold() for index in range(1, len(parts))]
+                if any(parent in seen_files for parent in parent_paths):
+                    return reject(f"entry is nested beneath a regular file: {name!r}")
+                if not is_directory and any(existing.startswith(normalized_path + "/") for existing in seen_paths):
+                    return reject(f"regular file conflicts with nested entries: {name!r}")
+
                 seen_paths.add(normalized_path)
+                if not is_directory:
+                    seen_files.add(normalized_path)
 
                 unix_mode = (entry.external_attr >> 16) & 0xFFFF
                 file_type = stat.S_IFMT(unix_mode)
