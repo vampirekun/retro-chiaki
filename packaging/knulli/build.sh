@@ -6,6 +6,11 @@ if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
     exit 2
 fi
 
+if [[ -L "$1" || ! -f "$1" ]]; then
+    echo "source ZIP must be a regular, non-symlink file: $1" >&2
+    exit 2
+fi
+
 SOURCE_ZIP="$(realpath "$1")"
 if [[ ! -f "$SOURCE_ZIP" ]]; then
     echo "source ZIP is not a regular file: $SOURCE_ZIP" >&2
