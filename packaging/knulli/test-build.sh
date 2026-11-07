@@ -171,4 +171,53 @@ if [ -e "$CASE_COLLISION_OUTPUT" ]; then
     exit 1
 fi
 
+
+FILE_PARENT_ZIP="$WORK_ROOT/file-parent-conflict.zip"
+python3 - "$FILE_PARENT_ZIP" <<'PY'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as archive:
+    archive.writestr("ports/chiaki", "regular file")
+    archive.writestr("ports/chiaki/child.txt", "nested entry")
+PY
+FILE_PARENT_OUTPUT="$WORK_ROOT/file-parent-conflict-output"
+if "$REPO_ROOT/packaging/knulli/build.sh" "$FILE_PARENT_ZIP" "file-parent-conflict" "$FILE_PARENT_OUTPUT" > "$WORK_ROOT/file-parent-conflict.log" 2>&1; then
+    echo "converter unexpectedly accepted an entry nested beneath a regular file" >&2
+    exit 1
+fi
+if ! grep -q "nested beneath a regular file" "$WORK_ROOT/file-parent-conflict.log"; then
+    echo "converter rejected the file-parent archive for an unexpected reason" >&2
+    cat "$WORK_ROOT/file-parent-conflict.log" >&2
+    exit 1
+fi
+if [ -e "$FILE_PARENT_OUTPUT" ]; then
+    echo "converter created output before rejecting a file-parent conflict" >&2
+    exit 1
+fi
+
+CHILD_FILE_ZIP="$WORK_ROOT/child-file-conflict.zip"
+python3 - "$CHILD_FILE_ZIP" <<'PY'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as archive:
+    archive.writestr("ports/chiaki/child.txt", "nested entry")
+    archive.writestr("ports/chiaki", "regular file")
+PY
+CHILD_FILE_OUTPUT="$WORK_ROOT/child-file-conflict-output"
+if "$REPO_ROOT/packaging/knulli/build.sh" "$CHILD_FILE_ZIP" "child-file-conflict" "$CHILD_FILE_OUTPUT" > "$WORK_ROOT/child-file-conflict.log" 2>&1; then
+    echo "converter unexpectedly accepted a regular file that conflicts with earlier nested entries" >&2
+    exit 1
+fi
+if ! grep -q "regular file conflicts with nested entries" "$WORK_ROOT/child-file-conflict.log"; then
+    echo "converter rejected the child-file archive for an unexpected reason" >&2
+    cat "$WORK_ROOT/child-file-conflict.log" >&2
+    exit 1
+fi
+if [ -e "$CHILD_FILE_OUTPUT" ]; then
+    echo "converter created output before rejecting a child-file conflict" >&2
+    exit 1
+fi
+
 echo "KNULLI package converter smoke tests passed"
