@@ -48,6 +48,23 @@ test -x "$WORK_ROOT/extracted/roms/ports/Chiaki.sh"
 test -x "$WORK_ROOT/extracted/roms/ports/chiaki/chiaki"
 test -x "$WORK_ROOT/extracted/roms/ports/chiaki/chiaki-cli"
 
+SYMLINK_SOURCE="$WORK_ROOT/symlink-source.zip"
+ln -s "$WORK_ROOT/base.zip" "$SYMLINK_SOURCE"
+SYMLINK_SOURCE_OUTPUT="$WORK_ROOT/symlink-source-output"
+if "$REPO_ROOT/packaging/knulli/build.sh" "$SYMLINK_SOURCE" "symlink-source" "$SYMLINK_SOURCE_OUTPUT" > "$WORK_ROOT/symlink-source.log" 2>&1; then
+    echo "converter unexpectedly accepted a symlink source archive" >&2
+    exit 1
+fi
+if ! grep -q "regular, non-symlink file" "$WORK_ROOT/symlink-source.log"; then
+    echo "converter rejected the symlink source archive for an unexpected reason" >&2
+    cat "$WORK_ROOT/symlink-source.log" >&2
+    exit 1
+fi
+if [ -e "$SYMLINK_SOURCE_OUTPUT" ]; then
+    echo "converter created output before rejecting the symlink source archive" >&2
+    exit 1
+fi
+
 INCOMPLETE_ROOT="$WORK_ROOT/incomplete"
 mkdir -p "$INCOMPLETE_ROOT/ports/chiaki"
 printf '%s\n' 'incomplete fixture' > "$INCOMPLETE_ROOT/ports/chiaki/chiaki"
