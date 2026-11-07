@@ -50,35 +50,57 @@ packaging/knulli/build.sh \
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`. The workflow:
 
-1. cross-compiles Chiaki and the Mali shim;
-2. assembles the complete dependency archive;
-3. converts it to the KNULLI package;
-4. verifies that bundled SDL and ALSA are absent;
-5. publishes only the KNULLI ZIP.
+1. runs the synthetic checksum-manifest regression guard;
+2. cross-compiles Chiaki and the Mali shim;
+3. assembles the complete dependency archive;
+4. converts it to the KNULLI package;
+5. verifies the package layout and that bundled SDL and ALSA are absent;
+6. generates `dist/SHA256SUMS` for the single KNULLI ZIP;
+7. creates a GitHub Release containing both the KNULLI ZIP and `SHA256SUMS`.
 
-`workflow_dispatch` performs the same build without creating a release.
+A manual `workflow_dispatch` run performs the build and package checks but
+does **not** create a GitHub Release. Instead, it uploads the ZIP files and
+`SHA256SUMS` as a downloadable Actions artifact for validation.
+
+The release workflow is intentionally limited to `v*` tag pushes and manual
+dispatches; pull requests do not publish packages or releases. The checksum
+guard runs immediately after checkout, before the ARM64 toolchain and
+cross-compilation dependencies are installed.
 
 ## Package verification
 
-Before publishing, check the archive:
+Before publishing, inspect the archive:
 
 ```bash
 unzip -l dist/*knulli-h700.zip | grep -E 'Chiaki.sh|chiaki$|libSDL2|libasound'
-sha256sum dist/*knulli-h700.zip
 ```
 
 The archive must contain `roms/ports/Chiaki.sh` and
 `roms/ports/chiaki/chiaki`. It must not contain active copies of
 `libSDL2-2.0.so.0` or `libasound.so.2` because KNULLI supplies both.
 
+Verify the generated checksum manifest from the distribution directory:
+
+```bash
+(cd dist && sha256sum --check SHA256SUMS)
+```
+
+The manifest contains exactly the generated KNULLI ZIP, not itself. It is
+removed before validation begins and is only replaced after a successful
+checksum calculation and self-check. A failed run must not leave a stale
+manifest that could be mistaken for evidence about a new package.
+
 ## Package converter smoke test
 
 On Linux, the native CTest suite also runs `packaging/knulli/test-build.sh`.
-The script creates a temporary fixture archive, exercises the Bash converter,
-checks the output layout and executable bits, verifies that host SDL/ALSA
-libraries are removed, and confirms that missing required inputs fail with a
-useful error. This does not replace the full AArch64 cross-compile or hardware
-testing.
+Before extraction, the Bash converter validates the source ZIP and rejects
+absolute or parent-directory paths, backslashes, duplicate/case-colliding
+entries, symlinks, special files, and encrypted entries. The smoke test creates
+temporary valid and hostile fixture archives, exercises the converter, checks
+the output layout and executable bits, verifies that host SDL/ALSA libraries
+are removed, and confirms that unsafe archives and missing required inputs
+fail before an output directory is created. This does not replace the full
+AArch64 cross-compile or hardware testing.
 
 Run it directly with:
 

@@ -26,6 +26,11 @@ if [[ "${#packages[@]}" -ne 1 ]]; then
     exit 1
 fi
 
+if [[ ! -f "${packages[0]}" || -L "${packages[0]}" ]]; then
+    echo "expected KNULLI package to be a regular, non-symlink file" >&2
+    exit 1
+fi
+
 package="${packages[0]##*/}"
 (
     cd "$DIST_DIR"
