@@ -95,9 +95,10 @@ manifest that could be mistaken for evidence about a new package.
 On Linux, the native CTest suite also runs `packaging/knulli/test-build.sh`.
 Before extraction, the Bash converter validates the source ZIP and rejects
 absolute or parent-directory paths, backslashes, duplicate/case-colliding
-entries, file/directory path conflicts, symlinks, special files, and encrypted entries. The smoke test creates
-temporary valid and hostile fixture archives, exercises the converter, checks
-the output layout and executable bits, verifies that host SDL/ALSA libraries
+entries, file/directory path conflicts, symlinks, special files, encrypted
+entries, and names containing NUL bytes. The smoke test creates temporary
+valid and hostile fixture archives, exercises the converter, checks the
+output layout and executable bits, verifies that host SDL/ALSA libraries
 are removed, and confirms that unsafe archives and missing required inputs
 fail before an output directory is created. This does not replace the full
 AArch64 cross-compile or hardware testing.
