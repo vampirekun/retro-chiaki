@@ -29,8 +29,15 @@ def main() -> int:
             seen_paths: set[str] = set()
             seen_files: set[str] = set()
             for entry in entries:
+                # ZipInfo.filename is truncated at the first NUL by Python.
+                # Inspect orig_filename so malformed raw ZIP names cannot bypass
+                # this preflight through parser normalization.
+                raw_name = entry.orig_filename
+                if not raw_name or "\x00" in raw_name:
+                    return reject("entry has an empty or NUL-containing name")
+
                 name = entry.filename
-                if not name or "\x00" in name:
+                if not name:
                     return reject("entry has an empty or NUL-containing name")
                 if "\\" in name or name.startswith("/") or re.match(r"^[A-Za-z]:", name):
                     return reject(f"entry uses an absolute or platform-specific path: {name!r}")
