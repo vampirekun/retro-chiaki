@@ -38,7 +38,7 @@ do
     fi
 done
 
-if grep -Eq '(^|/)libSDL2-2.0\.so\.0$|(^|/)libasound\.so\.2$' "$WORK_ROOT/package-entries.txt"; then
+if grep -Eq '(^|/)libSDL2-2.0\\.so\\.0$|(^|/)libasound\\.so\\.2$' "$WORK_ROOT/package-entries.txt"; then
     echo "KNULLI package must not bundle host SDL or ALSA libraries" >&2
     exit 1
 fi
@@ -96,7 +96,6 @@ if [ -e "$UNSAFE_OUTPUT" ]; then
     exit 1
 fi
 
-
 PATH_TRAVERSAL_ZIP="$WORK_ROOT/path-traversal.zip"
 python3 - "$PATH_TRAVERSAL_ZIP" <<'PY'
 import sys
@@ -117,6 +116,45 @@ if ! grep -q "unsafe path component" "$WORK_ROOT/path-traversal.log"; then
 fi
 if [ -e "$PATH_TRAVERSAL_OUTPUT" ]; then
     echo "converter created output before rejecting the traversal archive" >&2
+    exit 1
+fi
+
+NUL_NAME_ZIP="$WORK_ROOT/nul-name.zip"
+python3 - "$NUL_NAME_ZIP" <<'PY'
+import struct
+import sys
+import zlib
+
+name = b"ports/chiaki/harmless.txt\x00/../../escaped.txt"
+data = b"must not be extracted"
+crc = zlib.crc32(data) & 0xffffffff
+local = struct.pack(
+    "<IHHHHHIIIHH",
+    0x04034b50, 20, 0, 0, 0, 0, crc, len(data), len(data), len(name), 0
+) + name + data
+central = struct.pack(
+    "<IHHHHHHIIIHHHHHII",
+    0x02014b50, 0x0314, 20, 0, 0, 0, 0, crc, len(data), len(data),
+    len(name), 0, 0, 0, 0, 0o100644 << 16, 0
+) + name
+eocd = struct.pack(
+    "<IHHHHIIH", 0x06054b50, 0, 0, 1, 1, len(central), len(local), 0
+)
+with open(sys.argv[1], "wb") as archive:
+    archive.write(local + central + eocd)
+PY
+NUL_NAME_OUTPUT="$WORK_ROOT/nul-name-output"
+if "$REPO_ROOT/packaging/knulli/build.sh" "$NUL_NAME_ZIP" "nul-name" "$NUL_NAME_OUTPUT" > "$WORK_ROOT/nul-name.log" 2>&1; then
+    echo "converter unexpectedly accepted a ZIP entry with an embedded NUL" >&2
+    exit 1
+fi
+if ! grep -q "NUL-containing name" "$WORK_ROOT/nul-name.log"; then
+    echo "converter rejected the NUL-name archive for an unexpected reason" >&2
+    cat "$WORK_ROOT/nul-name.log" >&2
+    exit 1
+fi
+if [ -e "$NUL_NAME_OUTPUT" ]; then
+    echo "converter created output before rejecting the NUL-name archive" >&2
     exit 1
 fi
 
@@ -170,7 +208,6 @@ if [ -e "$CASE_COLLISION_OUTPUT" ]; then
     echo "converter created output before rejecting case-colliding entries" >&2
     exit 1
 fi
-
 
 FILE_PARENT_ZIP="$WORK_ROOT/file-parent-conflict.zip"
 python3 - "$FILE_PARENT_ZIP" <<'PY'
