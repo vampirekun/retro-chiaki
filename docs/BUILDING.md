@@ -63,7 +63,11 @@ does **not** create a GitHub Release. Instead, it uploads the ZIP files and
 `SHA256SUMS` as a downloadable Actions artifact for validation.
 
 The release workflow is intentionally limited to `v*` tag pushes and manual
-dispatches; pull requests do not publish packages or releases. The checksum
+dispatches; pull requests do not publish packages or releases. The checkout step
+uses `persist-credentials: false`: it can fetch the repository and recursive
+submodules, but does not leave the workflow's write-capable token in the local
+Git configuration while CMake and build scripts execute. Keep this setting
+when changing the release workflow. The checksum
 guard runs immediately after checkout, before the ARM64 toolchain and
 cross-compilation dependencies are installed.
 
